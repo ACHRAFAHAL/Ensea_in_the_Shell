@@ -7,7 +7,7 @@ CFLAGS	=	-Wall	-Wextra	-std=c99
 TARGET	=	enseash
 
 #LE FICHIER CODE SOURCE 
-SRC	=	q1_v2_enseash.c
+SRC	=	q1_enseash.c
 
 all:	$(SRC)
 	$(CC)	$(CFLAGS)	-o	$(TARGET)	$(SRC)

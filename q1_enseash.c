@@ -1,17 +1,15 @@
 #include <unistd.h>
 #include <string.h>
 
-#define welcome "Bienvenue dans le Shell ENSEA.\nPour quitter, tapez 'exit'.\n"
-#define Prompt "enseash % "
-#define bufsize 256
+#define BIENVENUE_MSG "Bienvenue dans le Shell ENSEA.\n\rPour quitter taper 'exit'\n"
+#define PROMPT "enseash %\n"
 
-// Display a message to stdout using write() 
-void display(const char *message) {
-    write(STDOUT_FILENO, message, strlen(message));
-}
+int main()
+{
 
-int main() {
-    display(welcome);
-    display(Prompt);
+    write(STDOUT_FILENO, BIENVENUE_MSG, strlen(BIENVENUE_MSG));
+    write(STDOUT_FILENO, PROMPT, strlen(PROMPT));
+
     return 0;
 }
+
