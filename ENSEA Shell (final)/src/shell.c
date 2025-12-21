@@ -1,0 +1,136 @@
+#include "shell.h"
+#include "display.h"
+#include "config.h"
+#include <unistd.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <stdio.h>
+#include <fcntl.h>
+
+/*
+    Read command from standard input STDIN and remove trailing newline
+    Returns the number of bytes read (excluding newline)
+ */
+ssize_t read_command(char *buffer, size_t buffer_size) {
+    ssize_t input_bytes = read(STDIN_FILENO, buffer, buffer_size - 1);
+
+    if (input_bytes > 0) {
+        buffer[input_bytes] = '\0';
+        
+        if (input_bytes > 0 && buffer[input_bytes - 1] == '\n') {
+            buffer[input_bytes - 1] = '\0';
+        }
+    }
+    
+    return input_bytes;  
+}
+
+/*
+    Check if the command is the exit command
+    Returns 1 if it's "exit", 0 otherwise
+*/
+int is_exit_command(const char *command) {
+    return strncmp(command, exit_command, strlen(exit_command)) == 0 &&
+           strlen(command) == strlen(exit_command);
+}
+
+/*
+    Parse command line into arguments array with the spliting by 
+    Detects < and > redirections
+    Returns the number of arguments excluding redirection symbols and files
+    Sets input_file and output_file pointers if redirections are found
+*/
+int parse_command(char *command, char **args, char **input_file, char **output_file) {
+    int argc = 0;
+    char *token = strtok(command, " \t");
+    
+    *input_file = NULL;
+    *output_file = NULL;
+    
+    while (token != NULL && argc < max_arg - 1) {
+        if (strcmp(token, "<") == 0) {
+            token = strtok(NULL, " \t");
+            if (token != NULL) {
+                *input_file = token;
+            }
+        } else if (strcmp(token, ">") == 0) {
+            token = strtok(NULL, " \t");
+            if (token != NULL) {
+                *output_file = token;
+            }
+        } else {
+            args[argc++] = token;
+        }
+        token = strtok(NULL, " \t");
+    }
+    
+    args[argc] = NULL;
+    return argc;
+}
+
+/*
+    Handle input/output redirections using dup2()
+    Opens files and redirects stdin/stdout accordingly
+*/
+void handle_redirections(char *input_file, char *output_file) {
+    if (input_file != NULL) {
+        int fd_in = open(input_file, O_RDONLY);
+        if (fd_in == -1) {
+            display("Error: cannot open input file\n");
+            _exit(1);
+        }
+        dup2(fd_in, STDIN_FILENO);
+        close(fd_in);
+    }
+    
+    if (output_file != NULL) {
+        int fd_out = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd_out == -1) {
+            display("Error: cannot open output file\n");
+            _exit(1);
+        }
+        dup2(fd_out, STDOUT_FILENO);
+        close(fd_out);
+    }
+}
+
+/*
+    Execute a command with arguments, redirections and measure execution time
+    Returns the status of the executed command
+*/
+int execute_command(char *command, long *exec_time_ms) {
+    pid_t pid = fork();
+    int status = 0;
+    struct timespec start, end;
+    char *args[max_arg];
+    char *input_file = NULL;
+    char *output_file = NULL;
+    
+    if (pid == -1) {
+        display("fork failed\n");
+        return -1;
+    }
+    
+    if (pid == 0) {
+        parse_command(command, args, &input_file, &output_file);
+        
+        if (args[0] == NULL) {
+            _exit(0);
+        }
+        handle_redirections(input_file, output_file);
+        
+        execvp(args[0], args);
+        display("command not found\n");
+        _exit(127);
+    } else {
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        waitpid(pid, &status, 0);
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        
+        *exec_time_ms = (end.tv_sec - start.tv_sec) * 1000 + 
+                        (end.tv_nsec - start.tv_nsec) / 1000000;
+        
+        return status;
+    }
+}
